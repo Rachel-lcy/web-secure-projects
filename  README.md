@@ -41,41 +41,41 @@ openssl req -nodes -new -x509 -keyout private-key.pem -out certificate.pem -days
 
 ## Setup Instructions
 
-- 1.Before starting, ensure that you have installed Node.js (https://nodejs.org/en), including npm.
-- 2.Open a terminal or command prompt.
-- 3.Create a new directory for your project:
+- 1. Before starting, ensure that you have installed Node.js (https://nodejs.org/en), including npm.
+- 2. Open a terminal or command prompt.
+- 3. Create a new directory for your project:
 
 ```bash
 mkdir web-secue-projects
 cd web-secue-projects
 ```
 
-- 4.Run the following command to create a package.json file:
+- 4. Run the following command to create a package.json file:
 
 ```bash
 npm init -y
 ```
 
-- 5.Install required packages:
+- 5. Install required packages:
 
 ```bash
 npm install express https fs hsts
 ```
 
-- 6.Create a new file named js:
+- 6. Create a new file named js:
 
 ```bash
 touch server.js
 ```
 
-- 7.Start the server with the following command:
+- 7. Start the server with the following command:
 
 ```bash
 node server.js
 ```
 
-- 8. Access the App:
-     https://localhost:3000
+- 8.  Access the App:
+      https://localhost:3000
 
 ## Core Routes and Caching Strategies
 
