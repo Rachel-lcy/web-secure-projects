@@ -5,7 +5,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const cookieParser = require('cookie-parser');
-const csrf = require('scurf')
+const csrf = require('csurf')
 
 const authRoutes = require('./routes/authRoutes.js')
 const userRoutes = require('./routes/user.js');
