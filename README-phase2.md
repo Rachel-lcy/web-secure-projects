@@ -5,8 +5,11 @@
 **Install Dependencies**
 
 ```bash
+npm install dotenv cookie-parser csurf
 npm install csurf cookie-parser
 npm install express-rate-limit
+npm install passport passport-google-oauth20
+npm install express-session
 ```
 
 **Create .env file**
