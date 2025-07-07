@@ -1,19 +1,45 @@
+require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const cookieParser = require('cookie-parser');
+const csrf = require('scurf')
+
+const authRoutes = require('./routes/authRoutes.js')
+const userRoutes = require('./routes/user.js');
+const fileRoutes = require('./routes/file.js');
+const { default: passport } = require('./auth/passport');
+require('./auth/passport.js')
 
 const HTTPS_PORT = process.env.PORT || 3000;
 
 const app = express();
-app.use(helmet());
 
+// Middleware
+app.use(helmet());
+app.use(express.json());
+app.use(cookieParser());
+app.use(passport.initialize());
+
+//CSRF
+const csrfProtection = csrf({cookie: true});
+app.use(csrfProtection)
 
 const projects = [
   { id: 1, title: 'Portfolio Website', description: 'A showcase of my work' },
   { id: 2, title: 'E-commerce Platform', description: 'An online store project' },
 ];
+
+app.get('/csrf-token', (req,res)=>{
+  res.cookie('XSRF-TOKEN', req.csrfToken(), {
+    secure: true,
+    sameSite: 'strict',
+    httpOnly: false,
+  });
+  res.status(200).json({ csrfToken: req.csrfToken() });
+})
 
 app.use('/static', express.static('public', {
   setHeaders: (res, path) => {
@@ -57,6 +83,10 @@ app.get('/contact', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.send('<h1>Contact Me</h1><p>Fill in the contact form to get in touch!</p>');
 });
+//backend routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/files', fileRoutes);
 
 const options = {
   cert: fs.readFileSync(path.join(__dirname, 'openssl', 'certificate.pem')),
