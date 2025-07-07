@@ -1,6 +1,6 @@
 # Developer portfolio and Project Showcase - Phase2: Implementing Authentication and Authorization
 
--This project builds on the secure HTTPS server created in Phase 1, extending it with robust user authentication and authorization features, including JWT-based access control, Google OAuth 2.0 SSO, ABAC/RBAC security models, and CSRF/session risk mitigation.
+-This project builds on the secure HTTP server created in Phase 1, extending it with robust user authentication and authorization features, including JWT-based access control, Google OAuth 2.0 SSO, ABAC/RBAC security models, and CSRF/session risk mitigation.
 
 **Install Dependencies**
 
