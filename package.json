@@ -1,4 +1,12 @@
 {
+  "name": "web-secure-projects",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "cookie-parser": "^1.4.7",
     "csurf": "^1.11.0",

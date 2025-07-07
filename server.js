@@ -1,17 +1,18 @@
-require('dotenv').config();
-const express = require('express');
-const helmet = require('helmet');
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
-const cookieParser = require('cookie-parser');
-const csrf = require('csurf')
+import 'dotenv/config';
+import express from 'express';
+import helmet from 'helmet';
+import https from 'https';
+import fs from 'fs';
+import path from 'path';
+import cookieParser from 'cookie-parser';
+import csrf from 'csurf';
+import passport from 'passport';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const authRoutes = require('./routes/authRoutes.js')
-const userRoutes = require('./routes/user.js');
-const fileRoutes = require('./routes/file.js');
-const { default: passport } = require('./auth/passport');
-require('./auth/passport.js')
+import userRoutes from './routes/user.js';
+import fileRoutes from './routes/file.js';
+import authRoutes from './routes/authRoutes.js';
 
 const HTTPS_PORT = process.env.PORT || 3000;
 
@@ -26,6 +27,15 @@ app.use(passport.initialize());
 //CSRF
 const csrfProtection = csrf({cookie: true});
 app.use(csrfProtection)
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const options = {
+  cert: fs.readFileSync(path.join(__dirname, 'openssl', 'certificate.pem')),
+  key: fs.readFileSync(path.join(__dirname, 'openssl', 'private-key.pem')),
+};
+
 
 const projects = [
   { id: 1, title: 'Portfolio Website', description: 'A showcase of my work' },
@@ -83,15 +93,13 @@ app.get('/contact', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.send('<h1>Contact Me</h1><p>Fill in the contact form to get in touch!</p>');
 });
+
 //backend routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/files', fileRoutes);
 
-const options = {
-  cert: fs.readFileSync(path.join(__dirname, 'openssl', 'certificate.pem')),
-  key: fs.readFileSync(path.join(__dirname, 'openssl', 'private-key.pem')),
-};
+
 
 https.createServer(options, app).listen(HTTPS_PORT, () => {
   console.log(`HTTPS server started at https://localhost:${HTTPS_PORT}`);
