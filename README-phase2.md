@@ -25,7 +25,7 @@ SESSION_SECRET =
 node server.js
 ```
 
-**Authentication Mechanism**
+# 1.Authentication Mechanism
 
 ## Local Authentication
 
@@ -48,7 +48,7 @@ node server.js
 - HttpOnly, Secure, SameSite=Strict
 - Session fixation mitigated by rotating tokens on login
 
-**RBAC and ABAC**
+# 2.RBAC and ABAC
 
 ## Roles Defined
 
@@ -67,7 +67,7 @@ node server.js
 - GET /admin // Admins only
 - GET /file/:id // Based on ABAC logic (department or uploader)
 
-**Security Measures**
+# 3.Security Measures
 
 ## Session Protections
 
@@ -85,7 +85,7 @@ node server.js
 - Applied on login route: max 5 requests per 15 minutes
 - Prevents brute-force attacks
 
-**Lesson Learned**
+# 4.Lesson Learned
 
 - Adding refresh tokens greatly improved UX, avoiding force logouts.
 - Middleware logic became complex with dual-role and attribute checks, but made system more scalable.
