@@ -12,6 +12,8 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import hpp from 'hpp';
 import { fileURLToPath } from 'url';
+import expressLayouts from 'express-ejs-layouts';
+import mongoose from 'mongoose';
 
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/user.js';
@@ -22,6 +24,7 @@ import { isAuthenticated } from './middleware/authorization.js';
 dotenv.config();
 const app = express();
 const HTTP_PORT = process.env.SERVER_PORT || 3000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/userAuth';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 if (process.env.TRUST_PROXY === '1') {
@@ -40,6 +43,8 @@ const  __dirname = path.dirname(__filename);
 
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
+app.use(expressLayouts);
+app.set('layout', 'layout');
 
 // Middleware
 app.use(
@@ -209,8 +214,33 @@ app.use((err, req, res, next) => {
 });
 
 
-app.listen(HTTP_PORT, () => {
-  console.log(`HTTP server started at http://localhost:${HTTP_PORT}`);
-});
+mongoose.set('strictQuery', true);
 
+async function start() {
+  try {
+    await mongoose.connect(MONGODB_URI, {
+
+      serverSelectionTimeoutMS: 5000,
+    });
+
+    console.log('✅ MongoDB connected:', mongoose.connection.host);
+
+
+    mongoose.connection.on('error', (err) => {
+      console.error('Mongo connection error:', err?.message || err);
+    });
+    mongoose.connection.on('disconnected', () => {
+      console.error('Mongo disconnected');
+    });
+
+    app.listen(HTTP_PORT, () => {
+      console.log(`HTTP server started at http://localhost:${HTTP_PORT}`);
+    });
+  } catch (err) {
+    console.error('❌ MongoDB connection failed:', err?.message || err);
+    process.exit(1);
+  }
+}
+
+start();
 export default app;

@@ -1,4 +1,4 @@
-<%- include('layout') %>
+
 
 <h2>Welcome, <%= (user && (user.username || user.name)) || 'User' %></h2>
 
@@ -7,7 +7,7 @@
 <% } %>
 
 <form method="post" action="/users/profile" class="form">
-  <!-- 重要：CSRF 隐藏字段（server.js /dashboard 路由已传入 csrfToken） -->
+
   <input type="hidden" name="_csrf" value="<%= csrfToken || '' %>" />
 
   <label>Name</label>

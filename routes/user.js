@@ -1,99 +1,95 @@
-import express from 'express';
-import argon2 from 'argon2';
-import jwt from 'jsonwebtoken';
+
+import { Router } from 'express';
 import User from '../models/User.js';
-import {configDotenv} from 'dotenv';
-import rateLimit from 'express-rate-limit';
+import { isAuthenticated } from '../middleware/authorization.js';
+import {
+  sanitizeName,
+  sanitizeEmail,
+  sanitizeBio,
+  validateProfile,
+} from '../utils/validation.js';
 
-configDotenv();
-
-const userRouter = express.Router()
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: {message:'Too many login attempts. Please try again after 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-})
+const router = Router();
 
 
-userRouter.post('/register', async(req,res)=> {
-  const {username,password, role, department} = req.body;
-  const hashPassword = await argon2.hash(password);
-  const randomNum = Math.floor(Math.random()*1000);
-  const userId = Date.now().toString().slice(7)+ randomNum;
+//GET /users/profile
 
+router.get('/profile', isAuthenticated, async (req, res) => {
+  const u = await User.findById(req.user.id);
+  if (!u) return res.status(404).json({ error: 'User not found' });
+
+  return res.json({
+    name: u.name || '',
+    email: u.email || '',
+    bio: u.getBioPlain(),
+  });
+});
+
+
+//POST /users/profile
+
+router.post('/profile', isAuthenticated, async (req, res) => {
   try {
-    const newUser = new User({
-      username,
-      userId,
-      password: hashPassword,
-      role,
-      department,
-    });
-    await newUser.save();
 
-    res.status(201).json({
-      message: 'User Created',
-      user: {
-        username: newUser.username,
-        userId: newUser.userId,
-        role: newUser.role,
-        department: newUser.department,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({ message: 'Internal server error' });
-    console.log(err);
-  }
-})
+    let { name, email, bio } = req.body;
+    name = sanitizeName(name);
+    email = sanitizeEmail(email);
+    bio = sanitizeBio(bio);
 
-userRouter.post('/login', loginLimiter, async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username });
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid username or password' });
+
+    const errors = validateProfile({ name, email, bio });
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).render('dashboard', {
+        user: req.user,
+        profile: { name, email, bio },
+        flash: errors.name || errors.email || errors.bio,
+        csrfToken: req.csrfToken?.() || '',
+      });
     }
 
-    const isPassWordValid = await argon2.verify(user.password, password);
-    if (!isPassWordValid) {
-      return res.status(400).json({ message: 'Invalid username or password' });
+
+    const exists = await User.findOne({ email, _id: { $ne: req.user.id } });
+    if (exists) {
+      return res.status(409).render('dashboard', {
+        user: req.user,
+        profile: { name, email, bio },
+        flash: 'Email already in use',
+        csrfToken: req.csrfToken?.() || '',
+      });
     }
 
-    const jwtToken = jwt.sign(
-      {
-        userId: user.userId,
-        username: user.username,
-        department: user.department,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
 
-    const refreshToken = jwt.sign(
-      {userId: user.userId},
-      process.env.JWT_REFRESH_SECRET,
-      { expiresIn: '7d' }
-    )
+    const u = await User.findById(req.user.id);
+    if (!u) {
+      return res.status(404).render('dashboard', {
+        user: req.user,
+        profile: { name, email, bio },
+        flash: 'User not found',
+        csrfToken: req.csrfToken?.() || '',
+      });
+    }
 
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure:true,
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    })
+    u.name = name;
+    u.email = email;
+    u.setBioPlain(bio);
+    await u.save();
 
-    res.status(200).json({
-      message: 'Login successfully',
-      authToken: jwtToken,
+
+    return res.render('dashboard', {
+      user: u,
+      profile: { name, email, bio },
+      flash: 'Profile saved securely.',
+      csrfToken: req.csrfToken?.() || '',
     });
-  } catch (err) {
-    console.log(err);
-    return res.status(500).json({ message: 'Internal server error' });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).render('dashboard', {
+      user: req.user,
+      profile: {},
+      flash: 'Save failed',
+      csrfToken: req.csrfToken?.() || '',
+    });
   }
 });
 
-export default userRouter;
+export default router;
