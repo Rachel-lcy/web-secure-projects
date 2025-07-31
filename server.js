@@ -113,7 +113,7 @@ app.use(
   })
 );
 
-
+app.use('/users', userRoutes);
 // === CSRF Token route (unprotected) ===
 const csrfProtection = csrf({
   cookie: {
