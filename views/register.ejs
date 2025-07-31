@@ -1,0 +1,20 @@
+<%- include('layout') %>
+
+<h2>Register</h2>
+<form method="post" action="/auth/register" class="form">
+  <label>Name</label>
+  <input name="name" required minlength="3" maxlength="50" pattern="[A-Za-z\s]+" />
+
+  <label>Email</label>
+  <input type="email" name="email" required />
+
+  <label>Password</label>
+  <input type="password" name="password" required minlength="8" />
+
+  <button type="submit">Create account</button>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <p class="error"><%= error %></p>
+  <% } %>
+</form>
+
+<p><a href="/auth/login">Already have an account? Login</a></p>

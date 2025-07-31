@@ -1,23 +1,32 @@
 import express from 'express';
 import helmet from 'helmet';
 import http from 'http';
-// import fs from 'fs';
+import fs from 'fs';
 import path from 'path';
 import cookieParser from 'cookie-parser';
 import csrf from 'csurf';
 import dotenv from 'dotenv';
 import passport from 'passport';
 import session from 'express-session';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
+import hpp from 'hpp';
+import { fileURLToPath } from 'url';
 
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/user.js';
 import fileRoutes from './routes/file.js';
+import { isAuthenticated } from './middleware/authorization.js';
 
 // Enable env vars
 dotenv.config();
 const app = express();
 const HTTP_PORT = process.env.SERVER_PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
+if (process.env.TRUST_PROXY === '1') {
+  app.set('trust proxy', 1);
+}
 // HTTPS credentials
 // const __dirname = path.resolve();
 // const options = {
@@ -25,12 +34,35 @@ const HTTP_PORT = process.env.SERVER_PORT || 3000;
 //   cert: fs.readFileSync(path.join(__dirname, 'openssl', 'certificate.pem')),
 // };
 
+//Path & Views
+const  __filename = fileURLToPath(import.meta.url);
+const  __dirname = path.dirname(__filename);
+
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
+
 // Middleware
-app.use(helmet());
-app.use(express.json());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "default-src": ["'self'"],
+        "img-src": ["'self'", "data:"],
+        "script-src": ["'self'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  })
+);
+app.use(hpp());
+app.use(compression());
+app.use(express.json({ limit: '200kb' }));
+app.use(express.urlencoded({ extended: true, limit: '200kb' }));
+
+// Cookies & Session
 app.use(cookieParser());
-
-
 app.use(session({
   secret: process.env.SESSION_SECRET,
   resave: false,
@@ -43,42 +75,71 @@ app.use(session({
   }
 }));
 
+import './auth/passport.js';
+app.use(passport.initialize());
+app.use(passport.session());
 
-  app.use(passport.initialize());
-  app.use(passport.session());
-
+app.use(
+  rateLimit({
+    windowMs:60*1000,
+    max:100,
+    standardHeaders:true,
+    legacyHeaders:false,
+  })
+)
 
 
 // Set static file cache headers
-app.use('/static', express.static('public', {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.css')) res.set('Cache-Control', 'max-age=86400');
-    if (filePath.endsWith('.jpg') || filePath.endsWith('.png')) {
-      res.set('Cache-Control', 'max-age=2592000');
-    }
-  }
-}));
+app.use(
+  '/static',
+  express.static(path.join(__dirname, 'public'), {
+    etag: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.css') || filePath.endsWith('.js')) {
+        res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+      } else if (/\.(jpg|jpeg|png|gif|svg)$/.test(filePath)) {
+        res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+      } else {
+        res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=300');
+      }
+    },
+  })
+);
 
-// Sample data
-const projects = [
-  { id: 1, title: 'Portfolio Website', description: 'A showcase of my work' },
-  { id: 2, title: 'E-commerce Platform', description: 'An online store project' },
-];
 
 // === CSRF Token route (unprotected) ===
-const csrfProtection = csrf({ cookie: true });
+const csrfProtection = csrf({
+  cookie: {
+    sameSite: 'strict',
+    httpOnly: true,
+    secure: NODE_ENV === 'production',
+} });
 
 app.get('/csrf-token', csrfProtection,(req, res) => {
   const token = req.csrfToken();
   res.cookie('XSRF-TOKEN', token, {
     secure: true,
     sameSite: 'strict',
-    httpOnly: false
+    httpOnly: false,
   });
   res.status(200).json({ csrfToken: token });
 });
 
+app.use((err, req, res, next) => {
+  if (err.code === 'EBADCSRFTOKEN') {
+    return res.status(403).send('Invalid CSRF token');
+  }
+  return next(err);
+});
+
+
 // === Public Routes ===
+
+const projects = [
+  { id: 1, title: 'Portfolio Website', description: 'A showcase of my work' },
+  { id: 2, title: 'E-commerce Platform', description: 'An online store project' },
+];
+
 app.get('/', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.send('<h1>Welcome to My Developer Portfolio</h1>');
@@ -104,11 +165,14 @@ app.get('/about', (req, res) => {
   res.send('<h1>About Me</h1><p>I am a developer who values security and performance.</p>');
 });
 
-app.get('/dashboard', (req, res) => {
-  if (!req.isAuthenticated || !req.isAuthenticated()) {
-    return res.redirect('/');
-  }
-  res.send(`<h1>Welcome ${req.user.username}</h1><p>You are logged in as ${req.user.role}</p>`);
+app.get('/dashboard',isAuthenticated, (req, res) => {
+  res.render('dashboard',
+    {
+      user: req.user,
+      profile: null,
+      flash: null,
+      csrfToken: req.csrfToken()
+    });
 });
 
 app.get('/contact', (req, res) => {
@@ -138,6 +202,15 @@ app.use('/files', csrfProtection, fileRoutes);
 //   console.log(`HTTP server started at http://localhost:${SERVER_PORT}`);
 // });
 
+app.use((req, res) => res.status(404).send('Not found'));
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).send('Server error');
+});
+
+
 app.listen(HTTP_PORT, () => {
   console.log(`HTTP server started at http://localhost:${HTTP_PORT}`);
 });
+
+export default app;

@@ -1,8 +1,19 @@
 import { Router } from 'express';
 import passport from '../auth/passport.js';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import User from '../models/User.js';
+import { sanitizeEmail, sanitizeName } from '../utils/validation.js';
+
 
 const router = Router();
+
+router.get('/register', (req, res) => {
+  res.render('register', { error: null });
+});
+
+
+
 
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
