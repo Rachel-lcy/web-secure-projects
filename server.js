@@ -19,6 +19,8 @@ import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/user.js';
 import fileRoutes from './routes/file.js';
 import { isAuthenticated } from './middleware/authorization.js';
+import User from './models/User.js';
+import { decrypt } from './utils/crypto.js';
 
 // Enable env vars
 dotenv.config();
@@ -117,7 +119,7 @@ const csrfProtection = csrf({
   cookie: {
     sameSite: 'strict',
     httpOnly: true,
-    secure: NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production',
 } });
 
 app.get('/csrf-token', csrfProtection,(req, res) => {
@@ -170,14 +172,34 @@ app.get('/about', (req, res) => {
   res.send('<h1>About Me</h1><p>I am a developer who values security and performance.</p>');
 });
 
-app.get('/dashboard',isAuthenticated, (req, res) => {
-  res.render('dashboard',
-    {
-      user: req.user,
-      profile: null,
+app.get('/dashboard', isAuthenticated, csrfProtection, async (req, res, next) => {
+  try {
+    const u = await User.findById(req.user._id).lean();
+
+    let bio = '';
+    if (u?.bio?.cipherTextB64 && u?.bio?.ivB64 && u?.bio?.tagB64) {
+      try {
+        bio = decrypt(u.bio.cipherTextB64, u.bio.ivB64, u.bio.tagB64) || '';
+      } catch {
+        bio = '';
+      }
+    } else {
+      bio = u?.bio || '';
+    }
+
+    res.render('dashboard', {
+      user: u,
+      csrfToken: req.csrfToken(),
+      profile: {
+        name: u?.name || '',
+        email: u?.email || '',
+        bio,
+      },
       flash: null,
-      csrfToken: req.csrfToken()
     });
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.get('/contact', (req, res) => {

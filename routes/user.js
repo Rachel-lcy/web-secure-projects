@@ -8,6 +8,7 @@ import {
   sanitizeBio,
   validateProfile,
 } from '../utils/validation.js';
+import csrf from 'csurf';
 
 const router = Router();
 
@@ -27,6 +28,14 @@ router.get('/profile', isAuthenticated, async (req, res) => {
 
 
 //POST /users/profile
+
+const csrfProtection = csrf({
+  cookie: {
+    sameSite: 'strict',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+  },
+});
 
 router.post('/profile', isAuthenticated, async (req, res) => {
   try {
