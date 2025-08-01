@@ -1,117 +1,94 @@
+
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+import bcrypt from 'bcrypt';
+
 import passport from '../auth/passport.js';
-import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+import { sanitizeEmail, sanitizeName } from '../utils/validation.js';
 
 const router = Router();
 
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-router.get('/google/callback',
-  passport.authenticate('google', { failureRedirect: '/' }),
-  (req, res) => {
-    const accessToken = jwt.sign(
-      {
-        userId: req.user._id,
-        username: req.user.username,
-        role: req.user.role,
-        department: req.user.department,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '15m' }
-    );
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many login attempts, please try again in 15 minutes.',
+});
 
-    const refreshToken = jwt.sign(
-      { userId: req.user._id },
-      process.env.JWT_REFRESH_SECRET,
-      { expiresIn: '7d' }
-    );
+// Register
+router.get('/register', (req, res) => {
+  res.render('register', { error: null });
+});
 
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    res.cookie('token', accessToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.redirect('/dashboard');
-  }
-);
-
-router.post('/refresh-token', (req, res) => {
-  const token = req.cookies.refreshToken;
-  if (!token) return res.status(401).json({ message: 'No refresh token' });
-
+router.post('/register', async (req, res) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-    const accessToken = jwt.sign(
-      {
-        userId: decoded.userId,
-        username: decoded.username,
-        department: decoded.department,
-        role: decoded.role,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '15m' }
-    );
-    res.json({ accessToken });
+    const name = sanitizeName(req.body.name);
+    const email = sanitizeEmail(req.body.email);
+    const password = String(req.body.password || '');
+
+
+    if (!/^[A-Za-z\s]{3,50}$/.test(name)) {
+      return res.status(400).render('register', { error: 'Name must be 3–50 alphabetic characters' });
+    }
+    if (!email) {
+      return res.status(400).render('register', { error: 'Invalid email address' });
+    }
+    if (password.length < 8) {
+      return res.status(400).render('register', { error: 'Password must be at least 8 characters' });
+    }
+
+    const exists = await User.findOne({ email });
+    if (exists) {
+      return res.status(409).render('register', { error: 'Email already registered' });
+    }
+
+    const hash = await bcrypt.hash(password, 12);
+    const u = new User({ email, name, password: hash });
+    await u.save();
+
+    return res.redirect('/auth/login');
   } catch (err) {
-    res.status(403).json({ message: 'Invalid refresh token' });
+    console.error('Register error:', err?.code, err?.message, err);
+    if (err && err.code === 11000) {
+      return res.status(409).render('register', { error: 'Email already registered' });
+    }
+    return res.status(500).render('register', { error: 'Registration failed' });
   }
 });
 
-  router.post('/login', (req, res, next) => {
-  passport.authenticate('local', { session: false }, (err, user, info) => {
-    if (err || !user) {
-      return res.status(401).json({ message: info?.message || 'Authentication failed' });
+//Login
+router.get('/login', (req, res) => {
+  res.render('login', { error: null });
+});
+
+
+router.post('/login', loginLimiter, (req, res, next) => {
+  passport.authenticate('local', { session: true }, (err, user, info) => {
+    if (err) {
+      console.error('Login error:', err);
+      return res.status(500).render('login', { error: 'Server error' });
     }
-
-    const accessToken = jwt.sign(
-      {
-        userId: user._id,
-        username: user.username,
-        role: user.role,
-        department: user.department,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '15m' }
-    );
-
-    const refreshToken = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_REFRESH_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+    if (!user) {
+      return res.status(401).render('login', { error: info?.message || 'Invalid credentials' });
+    }
+    req.logIn(user, (err2) => {
+      if (err2) {
+        console.error('req.logIn error:', err2);
+        return res.status(500).render('login', { error: 'Server error' });
+      }
+      return res.redirect('/dashboard');
     });
-
-    res.cookie('token', accessToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict',
-      maxAge: 15 * 60 * 1000,
-    });
-
-    return res.json({ message: 'Login successful', accessToken });
   })(req, res, next);
-  });
+});
 
-router.get('/logout', (req, res) => {
-  res.clearCookie('refreshToken');
-  res.clearCookie('token');
-  req.logout(() => {
-    res.redirect('/');
+//Logout
+router.post('/logout', (req, res, next) => {
+  req.logout(err => {
+    if (err) return next(err);
+    res.redirect('/auth/login');
   });
 });
 

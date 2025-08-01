@@ -1,0 +1,39 @@
+
+
+<h2>Welcome, <%= (user && (user.username || user.name)) || 'User' %></h2>
+
+<% if (typeof flash !== 'undefined' && flash) { %>
+  <p class="flash"><%= flash %></p>
+<% } %>
+
+<form method="post" action="/users/profile" class="form">
+
+  <input type="hidden" name="_csrf" value="<%= csrfToken || '' %>" />
+
+  <label>Name</label>
+  <input
+    name="name"
+    required
+    minlength="3"
+    maxlength="50"
+    pattern="[A-Za-z\s]+"
+    value="<%= (profile && profile.name) || user?.name || '' %>"
+  />
+
+  <label>Email</label>
+  <input
+    type="email"
+    name="email"
+    required
+    value="<%= (profile && profile.email) || user?.email || '' %>"
+  />
+
+  <label>Bio</label>
+  <textarea name="bio" maxlength="500"><%= (profile && profile.bio) || '' %></textarea>
+
+  <button type="submit">Save Profile</button>
+</form>
+
+<form method="post" action="/auth/logout" style="margin-top: 1rem">
+  <button type="submit">Logout</button>
+</form>
